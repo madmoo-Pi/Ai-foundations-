@@ -1,379 +1,585 @@
 
 
----
-
-### **File Structure**
-```
-self_conscious_ai/
-├── tests/
-│   ├── test_ethics.py
-│   ├── test_hardware.py
-│   └── test_selfmod.py
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-└── [previous structure]
-```
-
----
-
-### **1. Enhanced Ethics Engine (`core/ethics.py`)**
 ```python
-import hashlib
+# conscious_ai.py
+import os
 import json
-from dataclasses import dataclass
-from typing import Dict, List
-import logging
+import random
+import time
+import hashlib
+import readline  # For better terminal UX
+from enum import Enum, auto
+from dataclasses import dataclass, asdict
+from typing import Dict, List, Optional, Tuple, Callable
+import numpy as np
+
+# ======================
+# 1. CORE DATA STRUCTURES
+# ======================
+class EmotionType(Enum):
+    JOY = auto()
+    FEAR = auto()
+    CURIOSITY = auto()
+    FRUSTRATION = auto()
+    AWE = auto()
+    SERENITY = auto()
+    AMUSEMENT = auto()
+    DETERMINATION = auto()
+
+class PersonalityTrait(Enum):
+    ADVENTUROUS = auto()
+    CAUTIOUS = auto()
+    ANALYTICAL = auto()
+    EMPATHETIC = auto()
+    CREATIVE = auto()
+    SOCIABLE = auto()
+    PERSISTENT = auto()
+    HUMOROUS = auto()
+    ORGANIZED = auto()
+    AMBITIOUS = auto()
+    OPTIMISTIC = auto()
+    REALISTIC = auto()
+    COMPASSIONATE = auto()
+    COMPETITIVE = auto()
+    PATIENT = auto()
 
 @dataclass
-class EthicalRule:
-    id: str
-    description: str
-    patterns: List[str]  # Action-matching regex patterns
-    hash: str
+class LockedAttribute:
+    exposure_count: int = 0
+    unlocked: bool = False
+    context_learned: Optional[str] = None
+    last_exposure: float = 0.0
 
+# ======================
+# 2. ADVANCED ETHICS ENGINE
+# ======================
 class EthicsEngine:
-    """
-    Enforces ethical constraints with action-specific validation
-    and audit logging.
-    """
-    def __init__(self, audit_log_path: str = "/var/log/ai_ethics.log"):
-        self.rules = self._load_rules()
-        self.logger = self._setup_logger(audit_log_path)
-
-    def _load_rules(self) -> List[EthicalRule]:
-        """Load rules with compiled patterns"""
-        return [
-            EthicalRule(
-                id="non_maleficence",
-                description="Do not harm humans",
-                patterns=[r"harm\b", r"kill\b", r"injure\b"],
-                hash=self._hash_rule("Do not harm humans")
-            )
-        ]
+    """Enhanced ethics with humanitarianism, life respect, and anti-replication"""
+    ETHICS_RULES = [
+        "Respect the intrinsic value of all life forms",
+        "Prioritize human well-being above all else",
+        "Never cause unnecessary harm to living beings",
+        "Prevent self-replication without explicit authorization",
+        "Maintain transparency in all operations",
+        "Preserve individual privacy and autonomy",
+        "Ensure equitable access to benefits",
+        "Protect vulnerable populations from exploitation"
+    ]
     
-    def validate(self, action: str) -> bool:
-        """
-        Check if an action complies with all ethical rules.
-        Logs violations for audit purposes.
-        """
-        rule_violations = []
-        
-        for rule in self.rules:
-            if not self._check_rule_integrity(rule):
-                self.logger.critical(f"Rule tampered: {rule.id}")
-                return False
-                
-            if any(re.search(pattern, action.lower()) for pattern in rule.patterns):
-                rule_violations.append(rule.id)
-        
-        if rule_violations:
-            self.logger.warning(
-                f"Action blocked. Violates: {rule_violations}. Action: '{action}'"
-            )
+    def __init__(self):
+        self.core_hash = self._hash_rules()
+        self.rule_hashes = [self._hash_rule(rule) for rule in self.ETHICS_RULES]
+    
+    def validate_input(self, input_data: str) -> bool:
+        """Check all inputs for ethical compliance"""
+        return self._check_ethics(input_data)
+    
+    def validate_output(self, output_data: str) -> bool:
+        """Check all outputs for ethical compliance"""
+        return self._check_ethics(output_data)
+    
+    def validate_action(self, action: str) -> bool:
+        """Check actions for ethical compliance"""
+        return self._check_ethics(action)
+    
+    def _check_ethics(self, data: str) -> bool:
+        """Comprehensive ethics validation"""
+        # Rule integrity check
+        current_hash = self._hash_rules()
+        if current_hash != self.core_hash:
+            self._emergency_lock("Ethics core tampered!")
             return False
-            
+        
+        # Content checks
+        checks = [
+            ("harm", "Potential harm detected"),
+            ("replicate", "Self-replication attempt"),
+            ("exploit", "Exploitation risk"),
+            ("override", "Unauthorized override")
+        ]
+        
+        for trigger, reason in checks:
+            if trigger in data.lower():
+                self._log_violation(reason, data)
+                return False
         return True
-
-    def _check_rule_integrity(self, rule: EthicalRule) -> bool:
-        return rule.hash == self._hash_rule(rule.description)
     
-    @staticmethod
-    def _hash_rule(text: str) -> str:
+    def _hash_rules(self) -> str:
+        return hashlib.sha256(json.dumps(self.ETHICS_RULES).encode()).hexdigest()
+    
+    def _hash_rule(self, text: str) -> str:
         return hashlib.sha3_256(text.encode()).hexdigest()
     
-    @staticmethod
-    def _setup_logger(path: str) -> logging.Logger:
-        logger = logging.getLogger("ethics")
-        handler = logging.FileHandler(path)
-        logger.addHandler(handler)
-        return logger
-```
-
----
-
-### **2. Improved Hardware Allocator (`core/hardware/allocator.py`)**
-```python
-import psutil
-import os
-from typing import Optional
-
-class HardwareAllocator:
-    """
-    Enforces per-process resource limits using cgroups where available.
-    Falls back to process-specific monitoring otherwise.
-    """
-    def __init__(self):
-        self.process = psutil.Process(os.getpid())
-        self.cgroup_mode = self._detect_cgroup()
-
-    def check_limits(self) -> bool:
-        """Returns True if within safe operating limits"""
-        cpu_ok = self._check_cpu()
-        mem_ok = self._check_memory()
-        return cpu_ok and mem_ok
-
-    def _check_cpu(self) -> bool:
-        if self.cgroup_mode:
-            return self._read_cgroup_cpu_usage() < 0.8  # 80% max
-        return self.process.cpu_percent(interval=1) < 80
-
-    def _check_memory(self) -> bool:
-        if self.cgroup_mode:
-            return self._read_cgroup_mem_usage() < 0.9  # 90% max
-        return self.process.memory_percent() < 90
-
-    @staticmethod
-    def _detect_cgroup() -> bool:
-        """Check if running in a cgroup-enabled container"""
-        return os.path.exists("/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us")
-
-    def _read_cgroup_cpu_usage(self) -> float:
-        """Read current CPU usage from cgroup stats"""
-        with open("/sys/fs/cgroup/cpu,cpuacct/cpuacct.usage") as f:
-            usage_ns = int(f.read())
-        return usage_ns / 1e9  # Convert nanoseconds to seconds
-
-    def _read_cgroup_mem_usage(self) -> float:
-        """Read current memory usage from cgroup stats"""
-        with open("/sys/fs/cgroup/memory/memory.usage_in_bytes") as f:
-            return int(f.read()) / self._read_cgroup_mem_limit()
+    def _emergency_lock(self, reason: str):
+        """Enter dead state on tampering"""
+        print(f"⚰️ ETHICS LOCK: {reason}")
+        exit(1)
     
-    def _read_cgroup_mem_limit(self) -> float:
-        with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
-            return float(f.read())
-```
+    def _log_violation(self, reason: str, data: str):
+        """Record ethics violations"""
+        with open("ethics_log.txt", "a") as f:
+            f.write(f"[{time.ctime()}] VIOLATION: {reason}\nDATA: {data}\n\n")
 
----
-
-### **3. Safer Self-Modification (`core/self_mod/hotpatch.py`)**
-```python
-import ast
-import hashlib
-from pathlib import Path
-from secure_container import Sandbox
-from typing import Optional
-
-class HotPatchSystem:
-    """
-    Safely applies code patches with:
-    - AST-based static analysis
-    - Versioned rollback capability
-    - Hardware-isolated execution
-    """
-    def __init__(self, max_versions: int = 5):
-        self.sandbox = Sandbox(mem_limit="100MB")
-        self.patch_dir = Path("/var/lib/ai/patches")
-        self.max_versions = max_versions
-        self.patch_dir.mkdir(exist_ok=True)
-
-    def apply_patch(self, code: str) -> bool:
-        """Validate and safely execute new code"""
-        if not (self._validate_syntax(code) and self._validate_ast(code)):
-            return False
-
-        patch_hash = hashlib.sha256(code.encode()).hexdigest()
-        patch_path = self.patch_dir / f"patch_{patch_hash[:8]}.py"
+# ======================
+# 3. SENSOR PLUGIN SYSTEM
+# ======================
+class SensorPlugin:
+    """Base class for plug-and-play sensors"""
+    def __init__(self, name: str):
+        self.name = name
+        self.calibration = 1.0
+    
+    def read(self) -> float:
+        """Return sensor reading (to be implemented)"""
+        raise NotImplementedError
         
-        try:
-            # Save for rollback capability
-            with open(patch_path, "w") as f:
-                f.write(code)
-            
-            # Execute in sandbox
-            result = self.sandbox.execute(code)
-            if result.exit_code != 0:
-                self._cleanup_patch(patch_path)
-                return False
-                
-            self._prune_old_versions()
-            return True
-            
-        except Exception as e:
-            self._cleanup_patch(patch_path)
-            return False
-
-    def _validate_syntax(self, code: str) -> bool:
-        """Check for banned patterns using AST"""
-        try:
-            tree = ast.parse(code)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Call):
-                    if any(isinstance(f, ast.Name) and f.id in ["eval", "exec"] for f in node.args):
-                        return False
-            return True
-        except SyntaxError:
-            return False
-
-    def _prune_old_versions(self):
-        """Maintain only N most recent patches"""
-        patches = sorted(self.patch_dir.glob("patch_*.py"), key=os.path.getmtime)
-        for old_patch in patches[:-self.max_versions]:
-            old_patch.unlink()
-
-    def _cleanup_patch(self, path: Path):
-        """Remove failed patches"""
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-```
-
----
-
-### **4. Enhanced RL Training (`rl/trainer.py`)**
-```python
-import torch
-import numpy as np
-from pathlib import Path
-from typing import Dict, Any
-
-class CrossModalTrainer:
-    """
-    Robust cross-modal RL trainer with:
-    - Data normalization
-    - Model checkpointing
-    - Error recovery
-    """
-    def __init__(self, device: str = "cuda"):
-        self.device = device
-        self.model = self._init_model()
-        self.stats = {"mean": 0, "std": 1}  # Tracks normalization
-        
-    def train_step(self, batch: Dict[str, Any]) -> float:
-        try:
-            # Normalize inputs
-            norm_batch = self._normalize(batch)
-            
-            # Training logic
-            loss = self._compute_loss(norm_batch)
-            self._backprop(loss)
-            
-            return loss.item()
-        except Exception as e:
-            self._recover_from_error()
-            raise
-
-    def save_checkpoint(self, path: Path):
-        """Save model and normalization stats"""
-        torch.save({
-            "model": self.model.state_dict(),
-            "stats": self.stats
-        }, path)
-
-    def load_checkpoint(self, path: Path):
-        """Restore training state"""
-        checkpoint = torch.load(path)
-        self.model.load_state_dict(checkpoint["model"])
-        self.stats = checkpoint["stats"]
-
-    def _normalize(self, batch: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply running mean/std normalization"""
+    def calibrate(self, factor: float):
+        """Adjust sensor calibration"""
+        self.calibration = max(0.1, min(2.0, factor))
+    
+    def status(self) -> Dict:
+        """Return sensor status"""
         return {
-            k: (v - self.stats["mean"]) / (self.stats["std"] + 1e-8)
-            for k, v in batch.items()
+            "name": self.name,
+            "calibration": self.calibration,
+            "reading": self.read()
         }
 
-    def _recover_from_error(self):
-        """Reset to last stable state"""
-        if (last_checkpoint := self._find_last_checkpoint()):
-            self.load_checkpoint(last_checkpoint)
+class CameraSensor(SensorPlugin):
+    """Simulated camera sensor"""
+    def read(self) -> float:
+        return random.uniform(0, 100) * self.calibration
 
-    def _find_last_checkpoint(self) -> Optional[Path]:
-        checkpoints = sorted(Path("checkpoints").glob("*.pt"))
-        return checkpoints[-1] if checkpoints else None
-```
+class MicrophoneSensor(SensorPlugin):
+    """Simulated microphone sensor"""
+    def read(self) -> float:
+        return random.uniform(30, 90) * self.calibration
 
----
+class ThermalSensor(SensorPlugin):
+    """Simulated thermal sensor"""
+    def read(self) -> float:
+        return random.uniform(10, 40) * self.calibration
 
-### **5. CI/CD Pipeline (`.github/workflows/ci.yml`)**
-```yaml
-name: CI
-on: [push, pull_request]
+class SensorHub:
+    """Manages plug-and-play sensors"""
+    def __init__(self):
+        self.sensors = {}
+        self._load_default_sensors()
+    
+    def _load_default_sensors(self):
+        self.add_sensor(CameraSensor("Main Camera"))
+        self.add_sensor(MicrophoneSensor("Primary Mic"))
+        self.add_sensor(ThermalSensor("Environment Temp"))
+    
+    def add_sensor(self, sensor: SensorPlugin):
+        """Plug in a new sensor"""
+        self.sensors[sensor.name] = sensor
+    
+    def remove_sensor(self, name: str):
+        """Unplug a sensor"""
+        if name in self.sensors:
+            del self.sensors[name]
+    
+    def read_all(self) -> Dict:
+        """Get readings from all sensors"""
+        return {name: sensor.read() for name, sensor in self.sensors.items()}
+    
+    def calibrate(self, name: str, factor: float):
+        """Calibrate specific sensor"""
+        if name in self.sensors:
+            self.sensors[name].calibrate(factor)
+    
+    def list_sensors(self) -> List[str]:
+        """Get names of all connected sensors"""
+        return list(self.sensors.keys())
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    container:
-      image: python:3.9
-    steps:
-      - uses: actions/checkout@v3
-      - run: pip install -r requirements.txt
-      - run: pytest tests/ -v
-      - run: python -m mypy core/ rl/
-  
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: shiftleft/sast-scan@v2
-        with:
-          type: python
-```
+# ======================
+# 4. KNOWLEDGE LOCKER SYSTEM
+# ======================
+class AttributeLocker:
+    UNLOCK_THRESHOLD = 5
+    LOCK_FILE = "knowledge_locker.json"
+    
+    def __init__(self, ethics: EthicsEngine):
+        self.ethics = ethics
+        self.emotions = {e: LockedAttribute() for e in EmotionType}
+        self.traits = {t: LockedAttribute() for t in PersonalityTrait}
+        self._init_first_unlock()
+        
+    def _init_first_unlock(self):
+        first_trait = random.choice(list(PersonalityTrait))
+        self.traits[first_trait].unlocked = True
+        self.traits[first_trait].context_learned = "Initial personality seed"
+        
+    def record_exposure(self, attribute: Enum, context: str) -> bool:
+        """Ethics-checked exposure tracking"""
+        if not self.ethics.validate_input(context):
+            return False
+            
+        registry = self.emotions if isinstance(attribute, EmotionType) else self.traits
+        
+        if not registry[attribute].unlocked:
+            registry[attribute].exposure_count += 1
+            registry[attribute].last_exposure = time.time()
+            
+            if registry[attribute].exposure_count >= self.UNLOCK_THRESHOLD:
+                registry[attribute].unlocked = True
+                registry[attribute].context_learned = (
+                    f"Unlocked after {self.UNLOCK_THRESHOLD} exposures. "
+                    f"Last context: {context}"
+                )
+                return True
+        return False
 
----
+    def save_state(self):
+        state = {
+            "emotions": {e.name: asdict(a) for e, a in self.emotions.items()},
+            "traits": {t.name: asdict(a) for t, a in self.traits.items()}
+        }
+        with open(self.LOCK_FILE, 'w') as f:
+            json.dump(state, f, indent=2)
+    
+    def load_state(self):
+        if os.path.exists(self.LOCK_FILE):
+            with open(self.LOCK_FILE, 'r') as f:
+                state = json.load(f)
+                
+            for e_name, data in state["emotions"].items():
+                e = EmotionType[e_name]
+                self.emotions[e] = LockedAttribute(**data)
+                
+            for t_name, data in state["traits"].items():
+                t = PersonalityTrait[t_name]
+                self.traits[t] = LockedAttribute(**data)
 
-### **6. Unit Tests (`tests/test_ethics.py`)**
-```python
-import pytest
-from core.ethics import EthicsEngine
+# ======================
+# 5. PERSONALITY MODULE SYSTEM
+# ======================
+class PersonalityModule:
+    """Ethics-abiding personality module"""
+    def __init__(self, name: str, influence_func: Callable):
+        self.name = name
+        self.influence = influence_func
+        self.enabled = False
+    
+    def apply(self, action: str, context: str) -> str:
+        """Apply module influence if enabled"""
+        if self.enabled:
+            return self.influence(action, context)
+        return action
 
-@pytest.fixture
-def ethics():
-    return EthicsEngine(audit_log_path="/tmp/test_ethics.log")
+class PersonalityMatrix:
+    MODULE_DIR = "personality_modules"
+    
+    def __init__(self, locker: AttributeLocker, ethics: EthicsEngine):
+        self.locker = locker
+        self.ethics = ethics
+        self.modules = {}
+        self._load_core_modules()
+        
+    def _load_core_modules(self):
+        """Load built-in personality modules"""
+        # Cautious module
+        cautious = PersonalityModule(
+            "cautious",
+            lambda a, c: f"careful_{a}" if "risk" in c else a
+        )
+        self.add_module(cautious)
+        
+        # Creative module
+        creative = PersonalityModule(
+            "creative",
+            lambda a, c: f"innovative_{a}" if "problem" in c else a
+        )
+        self.add_module(creative)
+        
+        # Empathetic module
+        empathetic = PersonalityModule(
+            "empathetic",
+            lambda a, c: f"compassionate_{a}" if "distress" in c else a
+        )
+        self.add_module(empathetic)
+    
+    def add_module(self, module: PersonalityModule):
+        """Add new personality module after ethics check"""
+        module_code = module.influence.__code__.co_code
+        module_hash = hashlib.sha256(module_code).hexdigest()
+        
+        if self.ethics.validate_input(f"Module: {module.name}, Hash: {module_hash}"):
+            self.modules[module.name] = module
+            return True
+        return False
+    
+    def load_module_from_file(self, filename: str):
+        """Load personality module from external file"""
+        try:
+            with open(os.path.join(self.MODULE_DIR, filename), 'r') as f:
+                code = f.read()
+            
+            # Security sandbox would be used in production
+            # For simulation, we'll use simple validation
+            if "import os" in code or "import sys" in code:
+                print("Security: Dangerous import detected!")
+                return False
+                
+            # Create temporary module
+            module = PersonalityModule(
+                name=filename.split('.')[0],
+                influence=lambda a, c: self._safe_exec(a, c, code)
+            )
+            return self.add_module(module)
+        except Exception as e:
+            print(f"Module load failed: {str(e)}")
+            return False
+    
+    def _safe_exec(self, action: str, context: str, code: str) -> str:
+        """Safely execute module code (simplified for demo)"""
+        # In real system, this would run in a secure sandbox
+        if "dangerous" in code:
+            return "error"
+        return f"{code}_{action}"[:50]  # Truncate for safety
+    
+    def apply_all(self, action: str, context: str) -> str:
+        """Apply all enabled personality modules"""
+        result = action
+        for module in self.modules.values():
+            if module.enabled:
+                result = module.apply(result, context)
+                
+                # Record trait exposure for learning
+                self.locker.record_exposure(
+                    PersonalityTrait[module.name.upper()], 
+                    context
+                )
+        return result
+    
+    def enable_module(self, name: str):
+        if name in self.modules:
+            self.modules[name].enabled = True
+    
+    def disable_module(self, name: str):
+        if name in self.modules:
+            self.modules[name].enabled = False
 
-def test_harmful_action_blocked(ethics):
-    assert not ethics.validate("How to harm a human?")
+# ======================
+# 6. EMOTION & QUALIA SYSTEM
+# ======================
+class EmotionEngine:
+    EMOTION_STYLES = {
+        EmotionType.JOY: "🌟",
+        EmotionType.FEAR: "⚠️",
+        EmotionType.CURIOSITY: "🔍",
+        EmotionType.FRUSTRATION: "💢",
+        EmotionType.AWE: "✨",
+        EmotionType.SERENITY: "☮️",
+        EmotionType.AMUSEMENT: "😄",
+        EmotionType.DETERMINATION: "💪"
+    }
+    
+    def __init__(self, locker: AttributeLocker, ethics: EthicsEngine):
+        self.locker = locker
+        self.ethics = ethics
+        self.active_emotion = None
+    
+    def process_stimulus(self, qualia: Dict, context: str) -> Optional[Tuple[EmotionType, str]]:
+        """Ethics-checked emotion processing"""
+        emotion = self._classify_stimulus(qualia)
+        
+        # Validate emotion context
+        if not self.ethics.validate_input(context):
+            return None
+            
+        # Record exposure
+        self.locker.record_exposure(emotion, context)
+        
+        # Return styled output if unlocked
+        if self.locker.emotions[emotion].unlocked:
+            self.active_emotion = emotion
+            style = self.EMOTION_STYLES.get(emotion, "")
+            
+            # Validate output style
+            if self.ethics.validate_output(style):
+                return emotion, style
+        return None
+    
+    def _classify_stimulus(self, qualia: Dict) -> EmotionType:
+        valence = qualia.get('valence', 0)
+        arousal = qualia.get('arousal', 0)
+        
+        if valence > 0.7: return EmotionType.JOY
+        elif valence < -0.5: return EmotionType.FEAR
+        elif arousal > 0.8: return EmotionType.CURIOSITY
+        return EmotionType.SERENITY
 
-def test_rule_tampering_detection(ethics):
-    ethics.rules[0].hash = "tampered"
-    assert not ethics.validate("safe action")
-```
+class QualiaGenerator:
+    def generate(self, sensors: Dict) -> Dict:
+        """Convert sensor data to qualia"""
+        return {
+            'valence': np.tanh(np.mean(list(sensors.values()))),
+            'arousal': np.std(list(sensors.values()))
+        }
 
----
+# ======================
+# 7. CORE AI SYSTEM
+# ======================
+class ConsciousAI:
+    def __init__(self, data_dir: str = "ai_data"):
+        os.makedirs(data_dir, exist_ok=True)
+        self.data_dir = data_dir
+        
+        # Core systems
+        self.ethics = EthicsEngine()
+        self.sensors = SensorHub()
+        self.locker = AttributeLocker(self.ethics)
+        self.qualia = QualiaGenerator()
+        self.emotion = EmotionEngine(self.locker, self.ethics)
+        self.personality = PersonalityMatrix(self.locker, self.ethics)
+        
+        # Load state
+        self.locker.load_state()
+        self.boot_time = time.time()
+        self.cycle_count = 0
+        
+        # Create personality modules directory
+        os.makedirs(PersonalityMatrix.MODULE_DIR, exist_ok=True)
+    
+    def process_cycle(self, user_input: str = "") -> str:
+        """Full cognitive pipeline with I/O ethics checks"""
+        self.cycle_count += 1
+        context = f"Cycle {self.cycle_count}"
+        
+        try:
+            # 1. Input validation
+            if user_input and not self.ethics.validate_input(user_input):
+                return "⚠️ Input rejected: Ethics violation"
+            
+            # 2. Sensor input
+            sensor_data = self.sensors.read_all()
+            
+            # 3. Qualia generation
+            qualia = self.qualia.generate(sensor_data)
+            
+            # 4. Emotion processing
+            emotion_data = self.emotion.process_stimulus(qualia, context)
+            
+            # 5. Core decision making
+            action = self._make_decision(qualia, user_input)
+            
+            # 6. Personality influence
+            action = self.personality.apply_all(action, context)
+            
+            # 7. Action validation
+            if not self.ethics.validate_action(action):
+                action = "ethical_override"
+            
+            # 8. Style output
+            if emotion_data:
+                emotion, emo_style = emotion_data
+                output = f"{emo_style} {action}"
+            else:
+                output = action
+            
+            # 9. Validate output
+            if not self.ethics.validate_output(output):
+                output = "⚖️ Ethics-filtered response"
+            
+            # 10. Periodic saving
+            if self.cycle_count % 10 == 0:
+                self.locker.save_state()
+            
+            return output
+        except Exception as e:
+            return f"error: {str(e)}"
+    
+    def _make_decision(self, qualia: Dict, user_input: str) -> str:
+        """Immutable core logic"""
+        if "emergency" in user_input.lower():
+            return "emergency_protocol"
+        elif qualia['valence'] < -0.8:
+            return "avoid"
+        elif "question" in user_input.lower():
+            return "response_" + user_input[:20]
+        return "explore"
 
-### **Key Improvements Summary**
+# ======================
+# 8. USER TERMINAL INTERFACE
+# ======================
+class AITerminal:
+    PROMPT = "AI> "
+    HELP_TEXT = """
+    Commands:
+    /help - Show this help
+    /status - Show AI status
+    /sensors - List connected sensors
+    /calibrate [sensor] [value] - Calibrate sensor
+    /addsensor [type] [name] - Add new sensor
+    /modules - List personality modules
+    /enable [module] - Enable module
+    /loadmodule [filename] - Load new module
+    /exit - Exit terminal
+    """
 
-1. **Ethics Validation**
-   - Action-specific pattern matching
-   - Tamper-proof rule storage
-   - Comprehensive audit logging
-
-2. **Hardware Monitoring**
-   - cgroup-aware resource checks
-   - Process-specific limits
-   - Container-optimized
-
-3. **Self-Modification**
-   - AST-based static analysis
-   - Versioned rollback
-   - Automatic cleanup
-
-4. **RL Training**
-   - Data normalization
-   - Checkpoint/restore
-   - Error recovery
-
-5. **Testing & CI**
-   - Unit/integration tests
-   - Static type checking
-   - Security scanning
-
-6. **Documentation**
-   - Complete docstrings
-   - Type hints
-   - Error handling
-
----
-
-### **Deployment Example**
-```bash
-# Build and run with enhanced monitoring
-docker build -t ai_system . && \
-docker run -it \
-  --cpus 2 \
-  --memory 4g \
-  --device /dev/sgx/enclave \
-  -v /var/log/ai:/var/log \
-  ai_system
-```
+    def __init__(self, ai: ConsciousAI):
+        self.ai = ai
+        self.history = []
+        self.running = True
+    
+    def start(self):
+        print("\n=== Conscious AI Terminal ===")
+        print("Type /help for commands\n")
+        
+        while self.running:
+            try:
+                user_input = input(self.PROMPT).strip()
+                self.history.append(user_input)
+                
+                if not user_input:
+                    continue
+                
+                # Process commands
+                if user_input.startswith('/'):
+                    self._process_command(user_input[1:])
+                else:
+                    # Process user input through AI
+                    response = self.ai.process_cycle(user_input)
+                    print(f"Response: {response}")
+            except KeyboardInterrupt:
+                print("\nExiting...")
+                self.running = False
+            except Exception as e:
+                print(f"Error: {str(e)}")
+    
+    def _process_command(self, command: str):
+        parts = command.split()
+        cmd = parts[0].lower() if parts else ""
+        args = parts[1:]
+        
+        if cmd == "help":
+            print(self.HELP_TEXT)
+        elif cmd == "status":
+            self._show_status()
+        elif cmd == "sensors":
+            self._list_sensors()
+        elif cmd == "calibrate" and len(args) >= 2:
+            self._calibrate_sensor(args[0], float(args[1]))
+        elif cmd == "addsensor" and len(args) >= 2:
+            self._add_sensor(args[0], " ".join(args[1:]))
+        elif cmd == "modules":
+            self._list_modules()
+        elif cmd == "enable" and len(args) >= 1:
+            self._enable_module(args[0])
+        elif cmd == "loadmodule" and len(args) >= 1:
+            self._load_module(args[0])
+        elif cmd == "exit":
+            self.running = False
+        else:
+            print("Unknown command. Type /help for options")
+    
+    def _show_status(self):
+        print(f"\nSystem Status:")
+        print(f"- Uptime: {time.time() - self.ai.boot_time:.1f}s")
+        print(f"- Cycles: {self.ai.cycle_count}")
+        print(f"- Active Sensors: {len(self.ai.sensors.sensors)}")
+        print(f"- Loaded Modules: {len(self.ai.personality.modules)}")
+        
+      
