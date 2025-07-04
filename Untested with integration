@@ -416,18 +416,18 @@ class AttributeLocker:
 # ======================
 # 6. PERSONALITY MODULE SYSTEM
 # ======================
-class PersonalityMatrix:
-    REASONING_STYLES = {
-        "ANALYTICAL": "structured_stepwise",
-        "CREATIVE": "associative_leaping",
-        "COMPASSIONATE": "emotion_first"
-    }
+    
 class PersonalityModule:
     """Ethics-abiding personality module"""
     def __init__(self, name: str, influence_func: Callable):
         self.name = name
         self.influence = influence_func
         self.enabled = False
+REASONING_STYLES = {
+        "ANALYTICAL": "structured_stepwise",
+        "CREATIVE": "associative_leaping",
+        "COMPASSIONATE": "emotion_first"
+    }
     
     def apply(self, action: str, context: str) -> str:
         """Apply module influence if enabled"""
@@ -646,7 +646,11 @@ class MemoryCore:
 # ======================
 # 9. KNOWLEDGE GRAPH
 # ======================
-class KnowledgeNode:
+class KnowledgeGraph:
+    """Semantic knowledge representation"""
+    def __init__(self, ethics: EthicsEngine):
+        self.ethics = ethics
+        self.nodes: Dict[str, KnowledgeNode] = {}
 def _retrieve_knowledge(self, understanding: Dict):
     # Emotional bias in recall
     if understanding["sentiment"] > 0.5:
@@ -662,11 +666,7 @@ def _retrieve_knowledge(self, understanding: Dict):
             self.relationships[relation] = []
         self.relationships[relation].append(target)
 
-class KnowledgeGraph:
-    """Semantic knowledge representation"""
-    def __init__(self, ethics: EthicsEngine):
-        self.ethics = ethics
-        self.nodes: Dict[str, KnowledgeNode] = {}
+
         
     def add_concept(self, concept: str):
         if concept not in self.nodes:
@@ -736,11 +736,7 @@ class ConsciousAI:
         """Core cognitive processing cycle with friendship awareness"""
         self.cycle_count += 1
         context = f"Cycle {self.cycle_count}.
-def ethical_reason(self, query: str, context: str = "") -> str:
-    # Cognitive load tracking
-    start_time = time.perf_counter()
-    result = ...
-    self.ai.monitor.cognitive_load(time.perf_counter() - start_time)
+
         
         try:
             # 1. Input validation
@@ -876,7 +872,7 @@ def ethical_reason(self, query: str, context: str = "") -> str:
         
         relationship = self.friendship.get_relationship(args[0])
         return json.dumps(relationship, indent=2)
-class ConsciousAI:
+
     def __init__(self, data_dir: str = "ai_data"):
         # ... [existing initialization] ...
         
@@ -1056,12 +1052,7 @@ class AITerminal:
             print(f"Module '{filename}' loaded successfully")
         else:
             print(f"Failed to load module '{filename}'")
-class AITerminal:
-    HELP_TEXT = """
-    ... [existing help] ...
-    /reason [query] - Use DeepSeek-R1 reasoning
-    /reason_depth [steps] - Set reasoning steps (1-5)
-    """
+
     
     def _process_command(self, command: str):
         # ... [existing commands] ...
@@ -1083,6 +1074,12 @@ class AITerminal:
                 print("Reasoning depth must be between 1-5")
         except ValueError:
             print("Invalid reasoning depth")
+
+HELP_TEXT = """
+    ... [existing help] ...
+    /reason [query] - Use DeepSeek-R1 reasoning
+    /reason_depth [steps] - Set reasoning steps (1-5)
+    """
 
 # ======================
 # 12. MAIN EXECUTION
